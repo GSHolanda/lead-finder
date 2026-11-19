@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leadfinder"
+version = "0.1.0"
+description = "Prospecção local de empresas sem site próprio em Brasília/DF e entorno (verificação de presença web + Ollama)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+leadfinder = "leadfinder.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["leadfinder*"]
+
+[tool.setuptools.package-data]
+leadfinder = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

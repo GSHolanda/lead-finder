@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lead Finder — sites para negócios do DF</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Lead Finder</h1>
+      <div class="sub">Empresas de Brasília/DF e entorno sem site próprio localizado — revisão humana antes de qualquer contato</div>
+    </div>
+    <div class="pills" id="health"></div>
+  </header>
+  <nav id="tabs">
+    <button data-tab="campanha" class="active">Campanha (sem site) <span class="count" data-count="campanha">0</span></button>
+    <button data-tab="verificar">A verificar <span class="count" data-count="verificar">0</span></button>
+    <button data-tab="com_site">Com site — lista separada <span class="count" data-count="com_site">0</span></button>
+    <button data-tab="todos">Todos <span class="count" data-count="todos">0</span></button>
+    <button data-tab="descoberta">Descoberta</button>
+    <button data-tab="piloto">Piloto</button>
+    <button data-tab="config">Configurações</button>
+  </nav>
+  <main id="main"></main>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
