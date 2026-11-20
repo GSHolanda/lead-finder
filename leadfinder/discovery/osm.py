@@ -8,6 +8,7 @@ cada lead. Os dados do OSM são © colaboradores do OpenStreetMap (ODbL).
 from __future__ import annotations
 
 import sqlite3
+import time
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
@@ -27,6 +28,16 @@ SOCIAL_TAGS = {
 PHONE_TAGS = ["phone", "contact:phone", "mobile", "contact:mobile", "phone:mobile"]
 WHATSAPP_TAGS = ["contact:whatsapp", "whatsapp", "phone:whatsapp"]
 EMAIL_TAGS = ["email", "contact:email"]
+
+# Instâncias públicas alternativas, usadas quando a configurada falha (502/504,
+# conexão encerrada, tempo esgotado). A configurada é sempre tentada primeiro.
+OVERPASS_MIRRORS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+]
+OVERPASS_ATTEMPTS = 2  # tentativas por instância
+OVERPASS_BACKOFF = 15.0  # segundos entre tentativas na mesma instância
 
 
 @dataclass
@@ -116,6 +127,36 @@ def geocode(client: HttpClient, nominatim_url: str, query: str) -> tuple[float, 
     return float(data[0]["lat"]), float(data[0]["lon"])
 
 
+def _transient(res) -> bool:
+    return res.unreachable or res.status == 429
+
+
+def run_overpass(client: HttpClient, settings: dict, query: str, sleep=time.sleep) -> tuple[dict | None, str | None]:
+    """Envia a consulta, repetindo em falhas temporárias e passando aos espelhos.
+
+    Retorna (dados, erro). O erro reúne a última falha de cada instância.
+    """
+    endpoints = [settings["overpass_url"]] + [u for u in OVERPASS_MIRRORS if u != settings["overpass_url"]]
+    errors = []
+    for url in endpoints:
+        for attempt in range(OVERPASS_ATTEMPTS):
+            res, data = client.post_json(url, form={"data": query}, timeout=180)
+            remark = data.get("remark") if isinstance(data, dict) else None
+            if res.ok and isinstance(data, dict) and not (remark and "error" in remark.lower()):
+                return data, None
+            # HTTP 200 com "remark" de erro (ex.: tempo esgotado no servidor) vem com a
+            # lista vazia: é falha da consulta, não ausência de estabelecimentos.
+            detail = remark or res.error_detail or res.error or res.status
+            if not (remark or _transient(res)):
+                errors.append(f"{url}: {detail}")
+                break
+            if attempt + 1 < OVERPASS_ATTEMPTS:
+                sleep(OVERPASS_BACKOFF)
+        else:
+            errors.append(f"{url}: {detail}")
+    return None, "; ".join(errors)
+
+
 def discover(
     conn: sqlite3.Connection,
     client: HttpClient,
@@ -143,9 +184,9 @@ def discover(
             default_uf = "DF"
         else:
             default_city, default_uf = region_name, "GO"
-    res, data = client.post_json(settings["overpass_url"], form={"data": query}, timeout=180)
-    if not res.ok or not isinstance(data, dict):
-        return DiscoveryResult(query, 0, 0, 0, 0, error=f"Overpass: {res.error_detail or res.error or res.status}")
+    data, error = run_overpass(client, settings, query)
+    if data is None:
+        return DiscoveryResult(query, 0, 0, 0, 0, error=f"Overpass: {error}")
     elements = data.get("elements", [])
     created = merged = unnamed = 0
     for el in elements[: limit or len(elements)]:
