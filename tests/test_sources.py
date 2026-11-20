@@ -1,9 +1,10 @@
 from leadfinder import urls
 from leadfinder.db import connect
 from leadfinder.discovery.importers import cnpj_row_to_record, import_csv
-from leadfinder.discovery.osm import build_query, element_to_record
+from leadfinder.discovery.osm import OVERPASS_MIRRORS, build_query, element_to_record, run_overpass
 from leadfinder.discovery.segments import segment_for_cnae
 from leadfinder.leads import LeadRecord, get_lead, get_links, upsert_record
+from leadfinder.net import FetchResult
 from leadfinder.normalize import find_phones, name_in_text, norm_text, normalize_phone, phones_match
 
 
@@ -78,6 +79,55 @@ def test_query_overpass():
     assert 'nwr["shop"="hairdresser"]["name"](area.a);' in q
     q2 = build_query(["otica"], around=(-15.8, -47.9, 2000))
     assert "(around:2000,-15.8,-47.9)" in q2
+
+
+class _OverpassClient:
+    def __init__(self, replies):
+        self.replies = replies  # {url: [FetchResult, ...]}
+        self.calls = []
+
+    def post_json(self, url, payload=None, form=None, headers=None, timeout=None):
+        self.calls.append(url)
+        res = self.replies[url].pop(0)
+        return res, ({"elements": []} if res.ok else None)
+
+
+def test_overpass_repete_e_usa_espelho():
+    a, b = OVERPASS_MIRRORS[0], OVERPASS_MIRRORS[1]
+    client = _OverpassClient({
+        a: [FetchResult(url=a, status=502, error="http"), FetchResult(url=a, error="conexao")],
+        b: [FetchResult(url=b, status=200, ok=True)],
+    })
+    waits = []
+    data, err = run_overpass(client, {"overpass_url": a}, "q", sleep=waits.append)
+    assert data == {"elements": []} and err is None
+    assert client.calls == [a, a, b] and len(waits) == 1
+
+
+def test_overpass_remark_de_erro_nao_e_lista_vazia():
+    a, b = OVERPASS_MIRRORS[0], OVERPASS_MIRRORS[1]
+    timed_out = {"elements": [], "remark": 'runtime error: Query timed out in "query" at line 1'}
+
+    class Client(_OverpassClient):
+        def post_json(self, url, **kw):
+            self.calls.append(url)
+            return (FetchResult(url=url, status=200, ok=True),
+                    timed_out if url == a else {"elements": [{"id": 1}]})
+
+    client = Client({})
+    data, err = run_overpass(client, {"overpass_url": a}, "q", sleep=lambda s: None)
+    assert data == {"elements": [{"id": 1}]}
+    assert client.calls == [a, a, b]
+
+
+def test_overpass_nao_repete_erro_de_consulta():
+    a = OVERPASS_MIRRORS[0]
+    client = _OverpassClient({a: [FetchResult(url=a, status=400, error="http", error_detail="HTTP 400")]})
+    client.replies.update({u: [FetchResult(url=u, status=400, error="http", error_detail="HTTP 400")]
+                           for u in OVERPASS_MIRRORS[1:]})
+    data, err = run_overpass(client, {"overpass_url": a}, "q", sleep=lambda s: None)
+    assert data is None and "HTTP 400" in err
+    assert len(client.calls) == len(OVERPASS_MIRRORS)
 
 
 def test_cnpj_e_csv(tmp_path):

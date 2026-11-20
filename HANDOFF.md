@@ -37,8 +37,8 @@ Fica na raiz do repositório (`HANDOFF.md`). Atualize-o ao concluir mudanças re
 | `main` | **único branch e branch padrão**. Commit `2d97208` — merge do PR #1, com todo o código. |
 | PR | [GSHolanda/lead-finder#1](https://github.com/GSHolanda/lead-finder/pull/1) — **mesclado** |
 | Branch de trabalho `claude/magical-hypatia-gofd10` | **apagado** após o merge |
-| Testes | 40, todos passando (`python -m pytest`) |
-| Execução real | **nunca rodou** contra OpenStreetMap, busca web ou Ollama reais. O ambiente de nuvem bloqueava esses hosts. |
+| Testes | 43, todos passando (`python -m pytest`) |
+| Execução real | Primeira execução local em 20/11/2026: beleza em Taguatinga (raio 3000) → 7 leads; 2 site próprio, 5 inconclusiva. SearXNG local (Docker, porta 8888) funcionou. Overpass público instável: falhas corrigidas com repetição e espelhos (`run_overpass` em `osm.py`). |
 
 ### Histórico da `main`
 
@@ -304,7 +304,9 @@ Sem um provedor de busca, tudo fica "inconclusiva" — isso é proposital.
   - formato real das respostas do Overpass e do SearXNG;
   - qualidade da extração do modelo Ollama;
   - páginas de Linktree, cujos links podem estar em JSON (há um regex para `"url":"…"`).
-- A cobertura do OSM no DF é incompleta.
+- A cobertura do OSM no DF é incompleta (só 7 estabelecimentos de beleza em 3 km de Taguatinga).
+- Overpass público costuma responder 502/504 ou HTTP 200 com `remark` de erro e lista vazia. `run_overpass` trata ambos como falha, repete e passa aos espelhos (`OVERPASS_MIRRORS`).
+- Na execução real, vagas de emprego e posts de blog com o nome entram como candidatos `so_nome` e deixam o lead "inconclusiva". Avaliar descartá-los no piloto.
 - Os prefixos CNAE dos segmentos são referência e precisam de revisão.
 - Os códigos de município do entorno no arquivo do CNPJ exigem a tabela `Municipios` da Receita (`--municipios-arquivo`).
 - Heurísticas que provavelmente precisam de ajuste após o piloto:
